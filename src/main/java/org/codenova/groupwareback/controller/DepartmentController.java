@@ -1,6 +1,5 @@
 package org.codenova.groupwareback.controller;
 
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.codenova.groupwareback.entity.Department;
 import org.codenova.groupwareback.repository.DepartmentRepository;
@@ -17,7 +16,6 @@ import java.util.List;
 @RequestMapping("/api/department")
 @RequiredArgsConstructor
 public class DepartmentController {
-
     private final DepartmentRepository departmentRepository;
 
     @GetMapping

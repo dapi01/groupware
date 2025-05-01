@@ -1,5 +1,7 @@
 package org.codenova.groupwareback.controller;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +13,9 @@ import org.codenova.groupwareback.repository.EmployeeRepository;
 import org.codenova.groupwareback.repository.SerialRepository;
 import org.codenova.groupwareback.request.AddEmployee;
 import org.codenova.groupwareback.request.Login;
+import org.codenova.groupwareback.response.LoginResult;
 import org.mindrot.jbcrypt.BCrypt;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+
 
 @RestController
 @RequestMapping("/api/employee")
@@ -30,17 +35,21 @@ public class EmployeeController {
     private final DepartmentRepository departmentRepository;
     private final SerialRepository serialRepository;
 
+    @Value("${secret}") // springframwork 패키지의 value 어노테이션
+    private String secret;
+
+
     @GetMapping
     public ResponseEntity<List<Employee>> getEmployeeHandle() {
-        List<Employee> list =employeeRepository.findAll();
+        List<Employee> list = employeeRepository.findAll();
         return ResponseEntity.status(200).body(list);
     }
 
+
     @PostMapping
     @Transactional
-    public ResponseEntity<Employee> postEmployeeHandle(@RequestBody @Valid AddEmployee addEmployee,
-                                                       BindingResult result) {
-        if(result.hasErrors()) {
+    public ResponseEntity<Employee> postEmployeeHandle(@RequestBody @Valid AddEmployee addEmployee, BindingResult result) {
+        if (result.hasErrors()) {
             return ResponseEntity.status(400).body(null);  // bad request : 서버가 클라이언트 오류를 감지해 요청을 처리할 수 없는 코드
         }
         // 1. 사원번호 생성, 부서 객체
@@ -48,41 +57,39 @@ public class EmployeeController {
         // 정석적으로 사용한다면 serial.isPresent()  이런걸 확인해서 뽑아서 써야됨.
         Serial found = serial.get();    // 바로 뽑는 이유는 '100% 있는걸 알아서'
         Optional<Department> department = departmentRepository.findById(addEmployee.getDepartmentId());
-        if(department.isEmpty()) {
+        if (department.isEmpty()) {
             return ResponseEntity.status(400).body(null);
         }
         // 2. 사원 객체 생성 및 저장
-        Employee employee = Employee.builder()
-                .id("GW-" +(found.getLastNumber()+1))
-                .password(BCrypt.hashpw("0000", BCrypt.gensalt()))
-                .name(addEmployee.getName())
-                .active("N")
-                .email(addEmployee.getEmail())
-                .hireDate(addEmployee.getHireDate())
-                .position(addEmployee.getPosition())
-                .department(department.get())
-                .build();
+        Employee employee = Employee.builder().id("GW-" + (found.getLastNumber() + 1)).password(BCrypt.hashpw("0000", BCrypt.gensalt())).name(addEmployee.getName()).active("N").email(addEmployee.getEmail()).hireDate(addEmployee.getHireDate()).position(addEmployee.getPosition()).department(department.get()).build();
         employeeRepository.save(employee);
         // 시리얼 테이블의 last_number 를 업데이트 쳐줘야 함.
-        found.setLastNumber(found.getLastNumber()+1);
+        found.setLastNumber(found.getLastNumber() + 1);
         serialRepository.save(found);   // 수정할때 따른 메서드가 존재하지 않고
 
         return ResponseEntity.status(201).body(employee);   // created : 요청이 성공적으로 처리되었으며, 자원이 생성되었음을 나타내는 성공 상태 응답 코드
     }
 
+
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyHandle(@RequestBody @Valid Login login, BindingResult result) {
+    public ResponseEntity<LoginResult> verifyHandle(@RequestBody @Valid Login login, BindingResult result) {
         if (result.hasErrors()) {
             return ResponseEntity.status(400).body(null);
         }
         Optional<Employee> employee = employeeRepository.findById(login.getId());
-        if(employee.isEmpty() || !BCrypt.checkpw(login.getPassword(), employee.get().getPassword())) {
+        if (employee.isEmpty() || !BCrypt.checkpw(login.getPassword(), employee.get().getPassword())) {
             return ResponseEntity.status(401).body(null);
         }
 
-        return ResponseEntity.status(200).body(employee.get());
-    }
+        String token = JWT.create().withIssuer("groupware") // 토큰 발급처 - 프로젝트 이름
+                .withSubject(employee.get().getId())    // 토큰을 발부 대상 - 로그인 승인자 아이디
+                .sign(Algorithm.HMAC256(secret));  // 위조변증에 사용할 알고리즘 (암호키)
 
+
+        LoginResult loginResult = LoginResult.builder().token(token).employee(employee.get()).build();
+
+        return ResponseEntity.status(200).body(loginResult);
+    }
 
 
     @GetMapping("/{id}")
@@ -96,14 +103,14 @@ public class EmployeeController {
     }
 
 
-
-
-
-
-
-
-
 }
+
+
+
+
+
+
+
 
 
 
