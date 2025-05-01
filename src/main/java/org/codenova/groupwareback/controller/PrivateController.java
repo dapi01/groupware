@@ -26,31 +26,12 @@ import java.util.Optional;
 public class PrivateController {
     private final EmployeeRepository employeeRepository;
 
-    @Value("${secret}")
-    private String secret;
-
-
     // 수정하는 API는 put or patch mapping 을 사용하는 게 설계원칙에 맞음. (용도는 다름)
     // 우리나라 개발자들은 보통은 put으로 처리를 하는 경우가 많음.
     @PutMapping("/change-password")
     public ResponseEntity<?> patchChangePasswordHandle(
-
-            @RequestHeader ("Authorization")  @Nullable String token,
+            @RequestAttribute("subject") String subject,
             @RequestBody @Valid ChangePassword changePassword, BindingResult bindResult) {
-
-        if(token == null || !token.startsWith("Bearer ")) {
-            return ResponseEntity.status(401).body(null);
-        }
-        token = token.replace("Bearer ", "");
-
-        String subject = null;
-        try {
-            JWTVerifier verifier = JWT.require(Algorithm.HMAC256(secret)).withIssuer("groupware").build();
-            DecodedJWT jwt = verifier.verify(token);
-            subject = jwt.getSubject();
-        } catch(Exception e) {
-            return ResponseEntity.status(401).body(null);
-        }
 
         // if 바인딩리절트 에러 있으면 400번 응답
         if(bindResult.hasErrors()) {
@@ -61,7 +42,6 @@ public class PrivateController {
         if(!changePassword.getEmployeeId().equals(subject)) {
             return ResponseEntity.status(403).body(null);
         }
-
 
         Optional<Employee> optionalEmployee = employeeRepository.findById(changePassword.getEmployeeId());
         // employeeId 로 employee 찾앗는데 없으면 404 응답

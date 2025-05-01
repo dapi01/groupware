@@ -21,9 +21,6 @@ public class AppConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor).addPathPatterns("/api/private/**", "/api/public/**");
     }
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**").allowedOrigins("*").allowedMethods("*");
-    }
+
 }
 
