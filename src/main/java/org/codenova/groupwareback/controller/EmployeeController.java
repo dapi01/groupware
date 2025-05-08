@@ -17,6 +17,7 @@ import org.codenova.groupwareback.response.LoginResult;
 import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +32,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class EmployeeController {
+    private final SimpMessagingTemplate messagingTemplate;
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final SerialRepository serialRepository;
@@ -87,7 +89,7 @@ public class EmployeeController {
 
 
         LoginResult loginResult = LoginResult.builder().token(token).employee(employee.get()).build();
-
+        messagingTemplate.convertAndSend("/public", employee.get().getId()+" 가 로그인하였습니다.");
         return ResponseEntity.status(200).body(loginResult);
     }
 
@@ -104,6 +106,9 @@ public class EmployeeController {
 
 
 }
+
+
+
 
 
 

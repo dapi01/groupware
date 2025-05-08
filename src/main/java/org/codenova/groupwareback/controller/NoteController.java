@@ -14,12 +14,15 @@ import org.codenova.groupwareback.request.AddNote;
 import org.springframework.data.domain.Example;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+
 
 
 @RestController
@@ -32,6 +35,8 @@ public class NoteController {
     private final NoteRepository noteRepository;
     private final NoteStatusRepository noteStatusRepository;
 
+    private final SimpMessagingTemplate messagingTemplate;
+
     @PostMapping
     public ResponseEntity<?> createNote(@RequestAttribute String subject,
                                         @RequestBody @Valid AddNote addNote, BindingResult bindingResult) {
@@ -43,6 +48,7 @@ public class NoteController {
 
             return  new ResponseStatusException(HttpStatus.UNAUTHORIZED, "미인증 사원");
         });
+
         Note note= Note.builder().content(addNote.getContent())
                 .sendAt(LocalDateTime.now()).isDelete(false).sender(subjectEmployee).build();
         noteRepository.save(note);  // 새 쪽지는 저장이 됬고,
@@ -62,6 +68,9 @@ public class NoteController {
         */
 
         List<Employee> receivers = employeeRepository.findAllById(addNote.getReceiverIds());
+
+
+
         /*
         List<NoteStatus> noteStatusList = new ArrayList<>();
         for(Employee e: receivers) {
@@ -82,6 +91,11 @@ public class NoteController {
         }).toList();
         noteStatusRepository.saveAll(noteStatus);
 
+        for(Employee receiver : receivers) {
+            messagingTemplate.convertAndSend("/private/"+receiver.getId(), "새로운 쪽지를 수신하였습니다.");
+        }
+
+
         return ResponseEntity.status(203).body(null);
     }
 
@@ -96,6 +110,45 @@ public class NoteController {
         List<NoteStatus> noteStatusList = noteStatusRepository.findAllByReceiver(subjectEmployee);
         return ResponseEntity.status(200).body(noteStatusList);
 
+    }
+
+    @GetMapping("/outbox")
+    public ResponseEntity<?> getSendNote(@RequestAttribute String subject) {
+        // note 리포지토리에서 이 요청을 보낸 사용자가 쓴 note 를 가지고 와야 한다.
+        Employee subjectEmployee = employeeRepository.findById(subject)
+                .orElseThrow(()-> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."));
+        /*
+            Optional<Employee> optionalSubject = employeeRepository.findById(subject);
+            if(optionalSubject.isEmpty() ) {
+               throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증이 필요합니다.");
+            }
+            Employee subjectEmployee = optionalSubject.get();
+         */
+        List<Note> sendNotes = noteRepository.findAllBySender(subjectEmployee);
+        List<NoteStatus> sendNoteStatus =
+                noteStatusRepository.findAllByNoteIn(sendNotes);
+
+        return ResponseEntity.status(200).body(sendNoteStatus);
+    }
+
+    @PutMapping("/status/{id}")
+    public ResponseEntity<?> putStatusHandle(@RequestAttribute String subject, @PathVariable Long id) {
+        Optional<NoteStatus> optionalNoteStatus =noteStatusRepository.findById(id);
+        if(optionalNoteStatus.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "잘못된 id 값이 전달.");
+        }
+        NoteStatus noteStatus = optionalNoteStatus.get();
+        // 리시버가 요청을 사용자가 아니면,,? 이건 권한 없음
+        if(!noteStatus.getReceiver().getId().equals(subject)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "자신이 받은 쪽지만 상태 변경 가능.");
+        }
+        if(!noteStatus.getIsRead()) {
+            noteStatus.setIsRead(true);
+            noteStatus.setReadAt(LocalDateTime.now());
+            noteStatusRepository.save(noteStatus);
+        }
+        messagingTemplate.convertAndSend("/private/"+noteStatus.getNote().getSender().getId() );
+        return ResponseEntity.status(200).body(noteStatus);
     }
 
 }

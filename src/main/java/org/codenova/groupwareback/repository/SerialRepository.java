@@ -8,5 +8,7 @@ import java.util.Optional;
 
 @Repository
 public interface SerialRepository extends JpaRepository<Serial, Integer> {
+
     public Optional<Serial> findByRef(String ref);
+
 }
