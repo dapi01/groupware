@@ -7,7 +7,7 @@ import lombok.Setter;
 @Setter
 @Getter
 public class AddChat {
-    @NotBlank
-    private String message;
 
+    private String message;
 }
+

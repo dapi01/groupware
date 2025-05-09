@@ -147,7 +147,7 @@ public class NoteController {
             noteStatus.setReadAt(LocalDateTime.now());
             noteStatusRepository.save(noteStatus);
         }
-        messagingTemplate.convertAndSend("/private/"+noteStatus.getNote().getSender().getId() );
+        messagingTemplate.convertAndSend("/private/"+noteStatus.getNote().getSender().getId() ,subject + "가 당신이 보낸 쪽지를 확인하였습니다.");
         return ResponseEntity.status(200).body(noteStatus);
     }
 
